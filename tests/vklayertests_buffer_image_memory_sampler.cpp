@@ -13775,7 +13775,8 @@ TEST_F(VkSyncValTest, SyncLayoutTransition) {
         VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         0,
         VK_ACCESS_TRANSFER_WRITE_BIT,
-        VK_ACCESS_SHADER_READ_BIT,
+        VK_ACCESS_SHADER_READ_BIT, // fail
+        // VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,  // pass
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         0,
@@ -13799,12 +13800,9 @@ TEST_F(VkSyncValTest, SyncLayoutTransition) {
     vk::CmdDraw(m_commandBuffer->handle(), 1, 0, 0, 0);
     m_errorMonitor->VerifyFound();
 
-    m_errorMonitor->SetDesiredFailureMsg(VK_DEBUG_REPORT_ERROR_BIT_EXT, "SYNC-HAZARD-WRITE_AFTER_WRITE");
+    m_errorMonitor->ExpectSuccess();
     m_commandBuffer->EndRenderPass();
-    m_errorMonitor->VerifyFound();
-
-    // Since there isn't an Desired failure, end renderpass can complete.
-    m_commandBuffer->EndRenderPass();
+    m_errorMonitor->VerifyNotFound();
 
     // Catch a conflict with the input attachment final layout transition
     m_errorMonitor->SetDesiredFailureMsg(VK_DEBUG_REPORT_ERROR_BIT_EXT, "SYNC-HAZARD-WRITE_AFTER_WRITE");
@@ -13812,3 +13810,268 @@ TEST_F(VkSyncValTest, SyncLayoutTransition) {
                            &full_subresource_range);
     m_errorMonitor->VerifyFound();
 }
+
+TEST_F(VkSyncValTest, SyncNextSubpass) {
+    // CTS fails
+    // dEQP-VK.pipeline.multisample.min_sample_shading.min_0_0.samples_2.primitive_triangle
+
+    // ERROR Message:
+    // Assertion failed: external_context_ == last_trackback.context,
+    // file C:\Users\Locke\Works\Vulkan-ValidationLayers\layers\synchronization_validation.cpp, line 2026
+
+    // ERROR Message: (Not generate successfully in this test)
+    // vkCmdDraw: Hazard READ_RACING_WRITE for VkImageView 0x41ab840000000021[] in VkCommandBuffer 0x24bd5b14cf0[],
+    // VkPipeline 0xfed408000000002d[], and VkDescriptorSet 0xdd684a000000002f[] binding #0 index 0.
+    // Prior access (stage/access SYNC_COLOR_ATTACHMENT_OUTPUT_COLOR_ATTACHMENT_WRITE, command vkCmdDraw, seq #3, reset #1)
+
+    // Triaged:
+    // previous subpass of cmdDraw color attachment and current subpass of cmdDraw descriptorSets are using the same image
+    // (NextSubpass issue ???)
+
+    // ERROR Message: (Not generate successfully in this test)
+    // vkEndRenderPass: Hazard WRITE_RACING_WRITE in subpass 2 for attachment 0 color aspect
+    // during store/with storeOp VK_ATTACHMENT_STORE_OP_STORE.
+    // Prior access (stage/access SYNC_COLOR_ATTACHMENT_OUTPUT_COLOR_ATTACHMENT_WRITE, command vkCmdDraw, seq #3, reset #1)
+
+    // Triaged:
+    // This hazard is also from previous subpass of cmdDraw color attachment.
+
+    ASSERT_NO_FATAL_FAILURE(InitSyncValFramework());
+    ASSERT_NO_FATAL_FAILURE(InitState());
+    ASSERT_NO_FATAL_FAILURE(InitRenderTarget());
+
+    m_errorMonitor->ExpectSuccess();
+    VkImageUsageFlags usage_color =
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+    VkFormat m_colorFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    // VkImageUsageFlags usage_sample =
+    //    VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    VkImageObj image_color(m_device);  //, image_sample1(m_device), image_sample2(m_device);
+    auto image_ci = VkImageObj::ImageCreateInfo2D(32, 32, 1, 1, m_colorFormat, usage_color, VK_IMAGE_TILING_OPTIMAL);
+    // image_ci.samples = VK_SAMPLE_COUNT_2_BIT;
+    image_color.Init(image_ci);
+    VkImageView view_color = image_color.targetView(m_colorFormat);
+    std::vector<VkImageView> attachments;
+    attachments.emplace_back(view_color);
+    // image_ci.samples = VK_SAMPLE_COUNT_1_BIT;
+    // image_ci.usage = usage_sample;
+    // image_sample1.Init(image_ci);
+    // image_sample2.Init(image_ci);
+    // attachments.emplace_back(image_sample1.targetView(m_colorFormat));
+    // attachments.emplace_back(image_sample2.targetView(m_colorFormat));
+
+    VkRenderPass rp;
+    std::vector<VkAttachmentDescription> attachmentDescriptions;
+    const VkAttachmentDescription colorAttachmentDescription = {
+        0u,                     // VkAttachmentDescriptionFlags		flags;
+        m_colorFormat,          // VkFormat							format;
+        VK_SAMPLE_COUNT_1_BIT,  // VkSampleCountFlagBits			samples;
+        // VK_SAMPLE_COUNT_2_BIT,                   // VkSampleCountFlagBits			samples;
+        VK_ATTACHMENT_LOAD_OP_CLEAR,               // VkAttachmentLoadOp				loadOp;
+        VK_ATTACHMENT_STORE_OP_STORE,              // VkAttachmentStoreOp				storeOp;
+        VK_ATTACHMENT_LOAD_OP_DONT_CARE,           // VkAttachmentLoadOp				stencilLoadOp;
+        VK_ATTACHMENT_STORE_OP_DONT_CARE,          // VkAttachmentStoreOp				stencilStoreOp;
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,  // VkImageLayout					initialLayout;
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL   // VkImageLayout					finalLayout;
+    };
+    attachmentDescriptions.emplace_back(colorAttachmentDescription);
+
+    // uint32_t perSampleAttachmentIndex = static_cast<uint32_t>(attachmentDescriptions.size());
+    // const VkAttachmentDescription perSampleAttachmentDescription = {
+    //    0u,                                        // VkAttachmentDescriptionFlags		flags;
+    //    m_colorFormat,                             // VkFormat							format;
+    //    VK_SAMPLE_COUNT_1_BIT,                     // VkSampleCountFlagBits			samples;
+    //    VK_ATTACHMENT_LOAD_OP_CLEAR,               // VkAttachmentLoadOp				loadOp;
+    //    VK_ATTACHMENT_STORE_OP_STORE,              // VkAttachmentStoreOp				storeOp;
+    //    VK_ATTACHMENT_LOAD_OP_DONT_CARE,           // VkAttachmentLoadOp				stencilLoadOp;
+    //    VK_ATTACHMENT_STORE_OP_DONT_CARE,          // VkAttachmentStoreOp				stencilStoreOp;
+    //    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,  // VkImageLayout					initialLayout;
+    //    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL   // VkImageLayout					finalLayout;
+    //};
+    // attachmentDescriptions.push_back(perSampleAttachmentDescription);
+    // attachmentDescriptions.push_back(perSampleAttachmentDescription);
+
+    const VkAttachmentReference colorAttachmentReference = {
+        0u,                                       // deUint32			attachment;
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL  // VkImageLayout	layout;
+    };
+    const VkAttachmentReference inputAttachmentReference = {
+        0u,                                       // deUint32			attachment;
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL  // VkImageLayout	layout;
+    };
+
+    // const VkAttachmentReference colorAttachmentReferencesUnusedAttachment[] = {
+    //     {
+    //         VK_ATTACHMENT_UNUSED,      // deUint32			attachment
+    //         VK_IMAGE_LAYOUT_UNDEFINED  // VkImageLayout	layout
+    //     },
+    //     {
+    //         0u,                                       // deUint32			attachment
+    //         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL  // VkImageLayout	layout
+    //     }};
+    // std::vector<VkAttachmentReference> perSampleAttachmentReferences(2);
+    // for (size_t i = 0; i < 2; ++i) {
+    //     const VkAttachmentReference perSampleAttachmentReference = {
+    //         perSampleAttachmentIndex + static_cast<uint32_t>(i),  // deUint32			attachment;
+    //        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL              // VkImageLayout	layout;
+    //     };
+    //     perSampleAttachmentReferences[i] = perSampleAttachmentReference;
+    // }
+
+    std::vector<VkSubpassDescription> subpassDescriptions;
+    std::vector<VkSubpassDependency> subpassDependencies;
+
+    const VkSubpassDescription renderSubpassDescription = {
+        0u,                               // VkSubpassDescriptionFlags	flags;
+        VK_PIPELINE_BIND_POINT_GRAPHICS,  // VkPipelineBindPoint			pipelineBindPoint;
+        0u,                               // deUint32						inputAttachmentCount;
+        0,                                // const VkAttachmentReference*	pInputAttachments;
+        1u,                               // deUint32						colorAttachmentCount;
+        &colorAttachmentReference,        // const VkAttachmentReference*	pColorAttachments;
+        0,                                // const VkAttachmentReference*	pResolveAttachments;
+        0,                                // const VkAttachmentReference*	pDepthStencilAttachment;
+        0u,                               // deUint32						preserveAttachmentCount;
+        0                                 // const VkAttachmentReference*	pPreserveAttachments;
+    };
+    subpassDescriptions.emplace_back(renderSubpassDescription);
+
+    // for (size_t i = 0; i < 2; ++i) {
+    const VkSubpassDescription copySampleSubpassDescription = {
+        0u,                               // VkSubpassDescriptionFlags		flags;
+        VK_PIPELINE_BIND_POINT_GRAPHICS,  // VkPipelineBindPoint				pipelineBindPoint;
+        1u,                               // deUint32							inputAttachmentCount;
+        &inputAttachmentReference,        // const VkAttachmentReference*		pInputAttachments;
+        0,                                // deUint32							colorAttachmentCount;
+        0,                                // const VkAttachmentReference*		pColorAttachments;
+        // 1,                                // deUint32 colorAttachmentCount; &perSampleAttachmentReferences[i],  // const
+        // VkAttachmentReference*		pColorAttachments;
+        0,   // const VkAttachmentReference*		pResolveAttachments;
+        0,   // const VkAttachmentReference*		pDepthStencilAttachment;
+        0u,  // deUint32							preserveAttachmentCount;
+        0    // const VkAttachmentReference*		pPreserveAttachments;
+    };
+    subpassDescriptions.emplace_back(copySampleSubpassDescription);
+
+    const VkSubpassDependency copySampleSubpassDependency = {
+        0u,  // deUint32							srcSubpass
+        1u,  // deUint32 dstSubpass
+        // 1u + static_cast<uint32_t>(i),                // deUint32 dstSubpass
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,  // VkPipelineStageFlags				srcStageMask
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,          // VkPipelineStageFlags				dstStageMask
+        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,           // VkAccessFlags					srcAccessMask
+        VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,            // VkAccessFlags					dstAccessMask
+        0u,                                             // VkDependencyFlags				dependencyFlags
+    };
+    subpassDependencies.emplace_back(copySampleSubpassDependency);
+    //}
+    const VkRenderPassCreateInfo renderPassParams = {
+        VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,  // VkStructureType					sType;
+        0,                                          // const void*						pNext;
+        0u,                                         // VkRenderPassCreateFlags			flags;
+        (uint32_t)attachmentDescriptions.size(),    // deUint32							attachmentCount;
+        &attachmentDescriptions[0],                 // const VkAttachmentDescription*	pAttachments;
+        (uint32_t)subpassDescriptions.size(),       // deUint32							subpassCount;
+        &subpassDescriptions[0],                    // const VkSubpassDescription*		pSubpasses;
+        (uint32_t)subpassDependencies.size(),       // deUint32							dependencyCount;
+        &subpassDependencies[0]};
+
+    ASSERT_VK_SUCCESS(vk::CreateRenderPass(device(), &renderPassParams, nullptr, &rp));
+
+    VkFramebuffer fb;
+    VkFramebufferCreateInfo fbci = {
+        VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO, nullptr, 0, rp, (uint32_t)attachments.size(), &attachments[0], 32, 32, 1};
+    ASSERT_VK_SUCCESS(vk::CreateFramebuffer(device(), &fbci, nullptr, &fb));
+
+    CreatePipelineHelper g_pipe(*this);
+    g_pipe.InitInfo();
+    g_pipe.gp_ci_.renderPass = rp;
+    g_pipe.InitState();
+    ASSERT_VK_SUCCESS(g_pipe.CreateGraphicsPipeline());
+
+    char const *fsSource =
+        "#version 450\n"
+        "layout(input_attachment_index=0, set=0, binding=0) uniform subpassInput x;\n"
+        "void main() {\n"
+        "   vec4 color = subpassLoad(x);\n"
+        "}\n";
+
+    VkShaderObj vs(m_device, bindStateVertShaderText, VK_SHADER_STAGE_VERTEX_BIT, this);
+    VkShaderObj fs(m_device, fsSource, VK_SHADER_STAGE_FRAGMENT_BIT, this);
+
+    CreatePipelineHelper g_pipe_input(*this);
+    g_pipe_input.InitInfo();
+    g_pipe_input.dsl_bindings_ = {{0, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}};
+    g_pipe_input.shader_stages_ = {vs.GetStageCreateInfo(), fs.GetStageCreateInfo()};
+    g_pipe_input.gp_ci_.renderPass = rp;
+    g_pipe_input.InitState();
+    ASSERT_VK_SUCCESS(g_pipe_input.CreateGraphicsPipeline());
+
+    VkSampler sampler = VK_NULL_HANDLE;
+    VkSamplerCreateInfo sampler_info = SafeSaneSamplerCreateInfo();
+    vk::CreateSampler(m_device->device(), &sampler_info, NULL, &sampler);
+
+    VkDescriptorImageInfo image_info[1];
+    image_info[0].imageView = view_color;
+    image_info[0].sampler = sampler;
+    image_info[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkWriteDescriptorSet descriptor_write[1];
+    descriptor_write[0] = {};
+    descriptor_write[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptor_write[0].dstSet = g_pipe_input.descriptor_set_->set_;
+    descriptor_write[0].dstBinding = 0;
+    descriptor_write[0].descriptorCount = 1;
+    descriptor_write[0].descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+    descriptor_write[0].pImageInfo = image_info;
+    descriptor_write[0].pBufferInfo = nullptr;
+    descriptor_write[0].pTexelBufferView = nullptr;
+
+    vk::UpdateDescriptorSets(device(), 1, descriptor_write, 0, NULL);
+
+    m_commandBuffer->begin();
+    // cmdPipelineBarrier????
+    m_renderPassBeginInfo.renderArea = {{0, 0}, {32, 32}};
+    m_renderPassBeginInfo.renderPass = rp;
+    m_renderPassBeginInfo.framebuffer = fb;
+    m_commandBuffer->BeginRenderPass(m_renderPassBeginInfo);
+    vk::CmdBindPipeline(m_commandBuffer->handle(), VK_PIPELINE_BIND_POINT_GRAPHICS, g_pipe.pipeline_);
+    vk::CmdDraw(m_commandBuffer->handle(), 1, 0, 0, 0);
+
+    vk::CmdNextSubpass(m_commandBuffer->handle(), VK_SUBPASS_CONTENTS_INLINE);
+    vk::CmdBindPipeline(m_commandBuffer->handle(), VK_PIPELINE_BIND_POINT_GRAPHICS, g_pipe_input.pipeline_);
+    vk::CmdBindDescriptorSets(m_commandBuffer->handle(), VK_PIPELINE_BIND_POINT_GRAPHICS, g_pipe_input.pipeline_layout_.handle(), 0,
+                              1, &g_pipe_input.descriptor_set_->set_, 0, nullptr);
+    vk::CmdDraw(m_commandBuffer->handle(), 1, 0, 0, 0);
+
+    // ERROR Message:
+    // Assertion failed: external_context_ == last_trackback.context,
+    // file C:\Users\Locke\Works\Vulkan-ValidationLayers\layers\synchronization_validation.cpp, line 2026
+    m_commandBuffer->EndRenderPass();
+    m_commandBuffer->end();
+    m_errorMonitor->VerifyNotFound();
+}
+
+// CTS fail
+// dEQP-VK.renderpass.suballocation.attachment_allocation.input_output_chain.1
+// ERROR Message:
+// vkCmdDraw: Hazard READ_AFTER_WRITE for VkImageView 0x3ba5830000000006[] in VkCommandBuffer 0x1aba9959070[], VkPipeline
+// 0x57b9520000000037[], and VkDescriptorSet 0x8f32de000000003b[] binding #0 index 0. Prior access (stage/access
+// SYNC_COLOR_ATTACHMENT_OUTPUT_COLOR_ATTACHMENT_WRITE, command vkCmdBeginRenderPass, seq #1, reset #1). vkCmdDraw: Hazard
+// READ_AFTER_WRITE for VkImageView 0xedbd50000000010[] in VkCommandBuffer 0x1aba9959070[], VkPipeline 0x77c8ec0000000049[], and
+// VkDescriptorSet 0xbaa068000000004d[] binding #0 index 0. Prior access (stage/access
+// SYNC_COLOR_ATTACHMENT_OUTPUT_COLOR_ATTACHMENT_WRITE, command vkCmdNextSubpass, seq #4, reset #1). vkCmdDraw: Hazard
+// READ_AFTER_WRITE for VkImageView 0x67c11f000000001a[] in VkCommandBuffer 0x1aba9959070[], VkPipeline 0x4aff3e000000005b[], and
+// VkDescriptorSet 0x8dd6ba000000005f[] binding #0 index 0. Prior access (stage/access
+// SYNC_COLOR_ATTACHMENT_OUTPUT_COLOR_ATTACHMENT_WRITE, command vkCmdNextSubpass, seq #7, reset #1). vkCmdDraw: Hazard
+// READ_AFTER_WRITE for VkImageView 0x73cd210000000024[] in VkCommandBuffer 0x1aba9959070[], VkPipeline 0xd15c48000000006d[], and
+// VkDescriptorSet 0x8d5d40000000071[] binding #0 index 0. Prior access (stage/access
+// SYNC_COLOR_ATTACHMENT_OUTPUT_COLOR_ATTACHMENT_WRITE, command vkCmdNextSubpass, seq #10, reset #1). Assertion failed:
+// external_context == last_trackback.context, file
+// C:\Users\Locke\Works\Vulkan-ValidationLayers\layers\synchronization_validation.cpp, line 2064
+
+// CTS fail
+// dEQP-VK.renderpass.suballocation.attachment_allocation.input_output.14
+// AccessContext::ResolvePreviousAccess & AccessContext::ResolveAccessRange run super long loops
+// Triaged:
+// The test has 21 subpasses. It runs more and more loops in every next subpass.
+// The first five subpasses just run few loops. But after that, in every next subpass, the loop count increases massive
