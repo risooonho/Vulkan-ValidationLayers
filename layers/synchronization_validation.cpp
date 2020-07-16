@@ -801,20 +801,33 @@ bool AccessContext::ValidateStoreOperation(const SyncValidator &sync_state, cons
             HazardResult hazard;
             const char *aspect = nullptr;
             bool checked_stencil = false;
+            const auto &subpass_dsc = rp_state.createInfo.pSubpasses[subpass];
+
             if (is_color) {
-                hazard = DetectHazard(*image, SYNC_COLOR_ATTACHMENT_OUTPUT_COLOR_ATTACHMENT_WRITE,
-                                      view.normalized_subresource_range, kAttachmentRasterOrder, offset, extent);
-                aspect = "color";
-            } else {
+                // input attachments is read-only. Skip it.
+                if (subpass_dsc.colorAttachmentCount != 0) {
+                    for (uint32_t attach_index = 0; attach_index < subpass_dsc.colorAttachmentCount; ++attach_index) {
+                        if (subpass_dsc.pColorAttachments[attach_index].attachment == i) {
+                            hazard = DetectHazard(*image, SYNC_COLOR_ATTACHMENT_OUTPUT_COLOR_ATTACHMENT_WRITE,
+                                                  view.normalized_subresource_range, kAttachmentRasterOrder, offset, extent);
+                            aspect = "color";
+                            break;
+                        }
+                    }
+                }
+            } else if (subpass_dsc.pDepthStencilAttachment) {
                 const bool stencil_op_stores = ci.stencilStoreOp != VK_ATTACHMENT_STORE_OP_NONE_QCOM;
                 auto hazard_range = view.normalized_subresource_range;
-                if (has_depth && store_op_stores) {
+                // Skip read-only depth attachment
+                if (has_depth && store_op_stores && IsImageLayoutDepthWritable(subpass_dsc.pDepthStencilAttachment->layout)) {
                     hazard_range.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
                     hazard = DetectHazard(*image, SYNC_LATE_FRAGMENT_TESTS_DEPTH_STENCIL_ATTACHMENT_WRITE, hazard_range,
                                           kAttachmentRasterOrder, offset, extent);
                     aspect = "depth";
                 }
-                if (!hazard.hazard && has_stencil && stencil_op_stores) {
+                // Skip read-only stencil attachment
+                if (!hazard.hazard && has_stencil && stencil_op_stores &&
+                    IsImageLayoutStencilWritable(subpass_dsc.pDepthStencilAttachment->layout)) {
                     hazard_range.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
                     hazard = DetectHazard(*image, SYNC_LATE_FRAGMENT_TESTS_DEPTH_STENCIL_ATTACHMENT_WRITE, hazard_range,
                                           kAttachmentRasterOrder, offset, extent);
@@ -1234,19 +1247,29 @@ void AccessContext::UpdateAttachmentStoreAccess(const RENDER_PASS_STATE &rp_stat
             const bool has_stencil = FormatHasStencil(ci.format);
             const bool is_color = !(has_depth || has_stencil);
             const bool store_op_stores = ci.storeOp != VK_ATTACHMENT_STORE_OP_NONE_QCOM;
+            const auto &subpass_dsc = rp_state.createInfo.pSubpasses[subpass];
 
             if (is_color && store_op_stores) {
-                UpdateAccessState(*image, SYNC_COLOR_ATTACHMENT_OUTPUT_COLOR_ATTACHMENT_WRITE, view.normalized_subresource_range,
-                                  offset, extent, tag);
-            } else {
+                // input attachments is read-only. Skip it.
+                if (subpass_dsc.colorAttachmentCount != 0) {
+                    for (uint32_t attach_index = 0; attach_index < subpass_dsc.colorAttachmentCount; ++attach_index) {
+                        if (subpass_dsc.pColorAttachments[attach_index].attachment == i) {
+                            UpdateAccessState(*image, SYNC_COLOR_ATTACHMENT_OUTPUT_COLOR_ATTACHMENT_WRITE,
+                                              view.normalized_subresource_range, offset, extent, tag);
+                        }
+                    }
+                }
+            } else if (subpass_dsc.pDepthStencilAttachment) {
                 auto update_range = view.normalized_subresource_range;
-                if (has_depth && store_op_stores) {
+                // Skip read-only depth attachment
+                if (has_depth && store_op_stores && IsImageLayoutDepthWritable(subpass_dsc.pDepthStencilAttachment->layout)) {
                     update_range.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
                     UpdateAccessState(*image, SYNC_LATE_FRAGMENT_TESTS_DEPTH_STENCIL_ATTACHMENT_WRITE, update_range, offset, extent,
                                       tag);
                 }
                 const bool stencil_op_stores = ci.stencilStoreOp != VK_ATTACHMENT_STORE_OP_NONE_QCOM;
-                if (has_stencil && stencil_op_stores) {
+                // Skip read-only stencil attachment
+                if (has_stencil && stencil_op_stores && IsImageLayoutStencilWritable(subpass_dsc.pDepthStencilAttachment->layout)) {
                     update_range.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
                     UpdateAccessState(*image, SYNC_LATE_FRAGMENT_TESTS_DEPTH_STENCIL_ATTACHMENT_WRITE, update_range, offset, extent,
                                       tag);
