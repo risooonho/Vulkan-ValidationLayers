@@ -738,8 +738,28 @@ bool AccessContext::ValidateLoadOperation(const SyncValidator &sync_state, const
                 auto hazard_range = view.normalized_subresource_range;
                 bool checked_stencil = false;
                 if (is_color) {
-                    hazard = DetectHazard(*image, load_index, view.normalized_subresource_range, offset, extent);
-                    aspect = "color";
+                    const auto &subpass_dsc = rp_state.createInfo.pSubpasses[subpass];
+                    // separate color and input attachment
+                    bool is_color_attachment = false;
+                    if (subpass_dsc.colorAttachmentCount != 0) {
+                        for (uint32_t attach_index = 0; attach_index < subpass_dsc.colorAttachmentCount; ++attach_index) {
+                            if (subpass_dsc.pColorAttachments[attach_index].attachment == i) {
+                                hazard = DetectHazard(*image, load_index, view.normalized_subresource_range, offset, extent);
+                                aspect = "color";
+                                is_color_attachment = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!is_color_attachment && ci.loadOp == VK_ATTACHMENT_LOAD_OP_LOAD && subpass_dsc.inputAttachmentCount != 0) {
+                        for (uint32_t attach_index = 0; attach_index < subpass_dsc.inputAttachmentCount; ++attach_index) {
+                            if (subpass_dsc.pInputAttachments[attach_index].attachment == i) {
+                                hazard = DetectHazard(*image, load_index, view.normalized_subresource_range, offset, extent);
+                                aspect = "input";
+                                break;
+                            }
+                        }
+                    }
                 } else {
                     if (has_depth) {
                         hazard_range.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
@@ -2024,8 +2044,27 @@ void RenderPassAccessContext::RecordLoadOperations(const VkRect2D &render_area, 
             const bool is_color = !(has_depth || has_stencil);
 
             if (is_color) {
-                subpass_context.UpdateAccessState(*image, ColorLoadUsage(ci.loadOp), view.normalized_subresource_range, offset,
-                                                  extent, tag);
+                const auto &subpass_dsc = rp_state_->createInfo.pSubpasses[current_subpass_];
+                // separate color and input attachment
+                bool is_color_attachment = false;
+                if (subpass_dsc.colorAttachmentCount != 0) {
+                    for (uint32_t attach_index = 0; attach_index < subpass_dsc.colorAttachmentCount; ++attach_index) {
+                        if (subpass_dsc.pColorAttachments[attach_index].attachment == i) {
+                            subpass_context.UpdateAccessState(*image, ColorLoadUsage(ci.loadOp), view.normalized_subresource_range,
+                                                              offset, extent, tag);
+                            break;
+                        }
+                    }
+                }
+                if (!is_color_attachment && ci.loadOp == VK_ATTACHMENT_LOAD_OP_LOAD && subpass_dsc.inputAttachmentCount != 0) {
+                    for (uint32_t attach_index = 0; attach_index < subpass_dsc.inputAttachmentCount; ++attach_index) {
+                        if (subpass_dsc.pInputAttachments[attach_index].attachment == i) {
+                            subpass_context.UpdateAccessState(*image, SYNC_FRAGMENT_SHADER_INPUT_ATTACHMENT_READ,
+                                                              view.normalized_subresource_range, offset, extent, tag);
+                            break;
+                        }
+                    }
+                }
             } else {
                 auto update_range = view.normalized_subresource_range;
                 if (has_depth) {
