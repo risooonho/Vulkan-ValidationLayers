@@ -12027,10 +12027,14 @@ TEST_F(VkSyncValTest, SyncCopyOptimalMultiPlanarHazards) {
 
     ASSERT_NO_FATAL_FAILURE(InitState());
 
-    VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    //VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     VkFormat format = VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM;
     VkImageObj image_a(m_device);
-    const auto image_ci = VkImageObj::ImageCreateInfo2D(128, 128, 1, 2, format, usage, VK_IMAGE_TILING_OPTIMAL);
+    //const auto image_ci = VkImageObj::ImageCreateInfo2D(128, 128, 1, 2, format, usage, VK_IMAGE_TILING_OPTIMAL);
+    auto image_ci = VkImageObj::ImageCreateInfo2D(842, 2234, 1, 1, format, usage, VK_IMAGE_TILING_OPTIMAL);
+    image_ci.flags = VK_IMAGE_CREATE_DISJOINT_BIT;
+    VkBindImagePlaneMemoryInfo; // every plane bind a memory
     // Verify format
     bool supported = ImageFormatAndFeaturesSupported(instance(), gpu(), image_ci,
                                                      VK_FORMAT_FEATURE_TRANSFER_SRC_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT);
@@ -12039,7 +12043,9 @@ TEST_F(VkSyncValTest, SyncCopyOptimalMultiPlanarHazards) {
         return;  // Assume there's low ROI on searching for different mp formats
     }
 
-    image_a.Init(image_ci);
+    image_a.InitNoLayout(image_ci);
+    return;
+
     VkImageObj image_b(m_device);
     image_b.Init(image_ci);
     VkImageObj image_c(m_device);
