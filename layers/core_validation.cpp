@@ -1080,6 +1080,88 @@ bool CoreChecks::ValidateCmdBufDrawState(const CMD_BUFFER_STATE *cb_node, CMD_TY
                 }
             }
         }
+
+        // Check if an image subresource of attachments is used in another attachment.
+        std::set<uint32_t> attachments;
+        if (subpass.inputAttachmentCount > 0) {
+            for (uint32_t index = 0; index < subpass.inputAttachmentCount; ++index) {
+                if (subpass.pInputAttachments[index].attachment != VK_ATTACHMENT_UNUSED) {
+                    const auto ret = attachments.insert(subpass.pInputAttachments[index].attachment);
+                    if (!ret.second) {
+                        result |= LogError(cb_node->commandBuffer, vuid.image_subresources,
+                                           "%s: %s, subpass #%d, input attachment #%d uses duplicate attachment: %d.", function,
+                                           report_data->FormatHandle(cb_node->activeRenderPass->renderPass).c_str(),
+                                           cb_node->activeSubpass, index, subpass.pInputAttachments[index].attachment);
+                    }
+                }
+            }
+        }
+        if (subpass.colorAttachmentCount > 0) {
+            for (uint32_t index = 0; index < subpass.colorAttachmentCount; ++index) {
+                if (subpass.pColorAttachments[index].attachment != VK_ATTACHMENT_UNUSED) {
+                    const auto ret = attachments.insert(subpass.pColorAttachments[index].attachment);
+                    if (!ret.second) {
+                        result |= LogError(cb_node->commandBuffer, vuid.image_subresources,
+                                           "%s: %s, subpass #%d, color attachment #%d uses duplicate attachment: %d.", function,
+                                           report_data->FormatHandle(cb_node->activeRenderPass->renderPass).c_str(),
+                                           cb_node->activeSubpass, index, subpass.pColorAttachments[index].attachment);
+                    }
+                }
+                if (subpass.pResolveAttachments && subpass.pResolveAttachments[index].attachment != VK_ATTACHMENT_UNUSED) {
+                    const auto ret = attachments.insert(subpass.pResolveAttachments[index].attachment);
+                    if (!ret.second) {
+                        result |= LogError(cb_node->commandBuffer, vuid.image_subresources,
+                                           "%s: %s, subpass #%d, resolve attachment #%d uses duplicate attachment: %d.", function,
+                                           report_data->FormatHandle(cb_node->activeRenderPass->renderPass).c_str(),
+                                           cb_node->activeSubpass, index, subpass.pResolveAttachments[index].attachment);
+                    }
+                }
+            }
+        }
+        if (subpass.pDepthStencilAttachment && subpass.pDepthStencilAttachment->attachment != VK_ATTACHMENT_UNUSED) {
+            const auto ret = attachments.insert(subpass.pDepthStencilAttachment->attachment);
+            if (!ret.second) {
+                result |= LogError(cb_node->commandBuffer, vuid.image_subresources,
+                                   "%s: %s, subpass #%d, depthStenci attachment uses duplicate attachment: %d.", function,
+                                   report_data->FormatHandle(cb_node->activeRenderPass->renderPass).c_str(), cb_node->activeSubpass,
+                                   subpass.pDepthStencilAttachment->attachment);
+            }
+        }
+
+        std::vector<IMAGE_VIEW_STATE *> view_attachments(cb_node->activeFramebuffer->createInfo.attachmentCount);
+        for (const auto attachment : attachments) {
+            if (cb_node->activeFramebuffer->createInfo.attachmentCount > attachment) {
+                continue;
+            }
+            view_attachments[attachment] = Get<IMAGE_VIEW_STATE>(cb_node->activeFramebuffer->createInfo.pAttachments[attachment]);
+        }
+
+        for (uint32_t index = 0; index < cb_node->activeFramebuffer->createInfo.attachmentCount; ++index) {
+            if (view_attachments[index] == nullptr) {
+                continue;
+            }
+            for (uint32_t index1 = index + 1; index1 < cb_node->activeFramebuffer->createInfo.attachmentCount; ++index1) {
+                if (view_attachments[index1] == nullptr) {
+                    continue;
+                }
+                if (view_attachments[index]->OverlapSubresource(*view_attachments[index1])) {
+                    if (view_attachments[index]->image_view == view_attachments[index1]->image_view) {
+                        result |= LogError(cb_node->commandBuffer, vuid.image_subresources,
+                                           "%s: %s, subpass #%d, attachment #%d and #%d use the same %s", function,
+                                           report_data->FormatHandle(cb_node->activeRenderPass->renderPass).c_str(),
+                                           cb_node->activeSubpass, index, index1,
+                                           report_data->FormatHandle(view_attachments[index]->image_view).c_str());
+                    } else {
+                        result |= LogError(
+                            cb_node->commandBuffer, vuid.image_subresources,
+                            "%s: %s, subpass #%d, attachment #%d, %s subresouces overlaps with and attachment #%d, %s", function,
+                            report_data->FormatHandle(cb_node->activeRenderPass->renderPass).c_str(), cb_node->activeSubpass, index,
+                            report_data->FormatHandle(view_attachments[index]->image_view).c_str(), index1,
+                            report_data->FormatHandle(view_attachments[index1]->image_view).c_str());
+                    }
+                }
+            }
+        }
     }
     // Now complete other state checks
     string errorString;

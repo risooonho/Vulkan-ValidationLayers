@@ -493,6 +493,8 @@ class IMAGE_VIEW_STATE : public BASE_NODE {
     std::shared_ptr<IMAGE_STATE> image_state;
     IMAGE_VIEW_STATE(const std::shared_ptr<IMAGE_STATE> &image_state, VkImageView iv, const VkImageViewCreateInfo *ci);
     IMAGE_VIEW_STATE(const IMAGE_VIEW_STATE &rh_obj) = delete;
+
+    bool OverlapSubresource(const IMAGE_VIEW_STATE& compare_view);
 };
 
 class ACCELERATION_STRUCTURE_STATE : public BINDABLE {

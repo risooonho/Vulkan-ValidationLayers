@@ -64,6 +64,7 @@ static const std::map<CMD_TYPE, DrawDispatchVuid> drawdispatch_vuid = {
         "VUID-vkCmdDraw-primitiveTopology-03420",
         "VUID-vkCmdDraw-flags-02696",
         "VUID-vkCmdDraw-None-02686",
+        "VUID-vkCmdDraw-None-02687",
     }},
     {CMD_DRAWINDEXED, {
         "VUID-vkCmdDrawIndexed-commandBuffer-cmdpool",
@@ -87,6 +88,7 @@ static const std::map<CMD_TYPE, DrawDispatchVuid> drawdispatch_vuid = {
         "VUID-vkCmdDrawIndexed-primitiveTopology-03420",
         "VUID-vkCmdDrawIndexed-flags-02696",
         "VUID-vkCmdDrawIndexed-None-02686",
+        "VUID-vkCmdDrawIndexed-None-02687",
     }},
     {CMD_DRAWINDIRECT, {
         "VUID-vkCmdDrawIndirect-commandBuffer-cmdpool",
@@ -110,6 +112,7 @@ static const std::map<CMD_TYPE, DrawDispatchVuid> drawdispatch_vuid = {
         "VUID-vkCmdDrawIndirect-primitiveTopology-03420",
         "VUID-vkCmdDrawIndirect-flags-02696",
         "VUID-vkCmdDrawIndirect-None-02686",
+        "VUID-vkCmdDrawIndirect-None-02687",
     }},
     {CMD_DRAWINDEXEDINDIRECT, {
         "VUID-vkCmdDrawIndexedIndirect-commandBuffer-cmdpool",
@@ -133,6 +136,7 @@ static const std::map<CMD_TYPE, DrawDispatchVuid> drawdispatch_vuid = {
         "VUID-vkCmdDrawIndexedIndirect-primitiveTopology-03420",
         "VUID-vkCmdDrawIndexedIndirect-flags-02696",
         "VUID-vkCmdDrawIndexedIndirect-None-02686",
+        "VUID-vkCmdDrawIndexedIndirect-None-02687",
     }},
     {CMD_DISPATCH, {
         "VUID-vkCmdDispatch-commandBuffer-cmdpool",
@@ -202,6 +206,7 @@ static const std::map<CMD_TYPE, DrawDispatchVuid> drawdispatch_vuid = {
         "VUID-vkCmdDrawIndirectCount-primitiveTopology-03420",
         "VUID-vkCmdDrawIndirectCount-flags-02696",
         "VUID-vkCmdDrawIndirectCount-None-02686",
+        "VUID-vkCmdDrawIndirectCount-None-02687",
     }},
     {CMD_DRAWINDEXEDINDIRECTCOUNT,{
         "VUID-vkCmdDrawIndexedIndirectCount-commandBuffer-cmdpool",
@@ -225,6 +230,7 @@ static const std::map<CMD_TYPE, DrawDispatchVuid> drawdispatch_vuid = {
         "VUID-vkCmdDrawIndexedIndirectCount-primitiveTopology-03420",
         "VUID-vkCmdDrawIndexedIndirectCount-flags-02696",
         "VUID-vkCmdDrawIndexedIndirectCount-None-02686",
+        "VUID-vkCmdDrawIndexedIndirectCount-None-02687",
     }},
     {CMD_TRACERAYSNV, {
         "VUID-vkCmdTraceRaysNV-commandBuffer-cmdpool",
@@ -317,6 +323,7 @@ static const std::map<CMD_TYPE, DrawDispatchVuid> drawdispatch_vuid = {
         "VUID-vkCmdDrawMeshTasksNV-primitiveTopology-03420",
         "VUID-vkCmdDrawMeshTasksNV-flags-02696",
         "VUID-vkCmdDrawMeshTasksNV-None-02686",
+        "VUID-vkCmdDrawMeshTasksNV-None-02687",
     }},
     {CMD_DRAWMESHTASKSINDIRECTNV, {
         "VUID-vkCmdDrawMeshTasksIndirectNV-commandBuffer-cmdpool",
@@ -340,6 +347,7 @@ static const std::map<CMD_TYPE, DrawDispatchVuid> drawdispatch_vuid = {
         "VUID-vkCmdDrawMeshTasksIndirectNV-primitiveTopology-03420",
         "VUID-vkCmdDrawMeshTasksIndirectNV-flags-02696",
         "VUID-vkCmdDrawMeshTasksIndirectNV-None-02686",
+        "VUID-vkCmdDrawMeshTasksIndirectNV-None-02687",
     }},
     {CMD_DRAWMESHTASKSINDIRECTCOUNTNV, {
         "VUID-vkCmdDrawMeshTasksIndirectCountNV-commandBuffer-cmdpool",
@@ -363,6 +371,7 @@ static const std::map<CMD_TYPE, DrawDispatchVuid> drawdispatch_vuid = {
         "VUID-vkCmdDrawMeshTasksIndirectCountNV-primitiveTopology-03420",
         "VUID-vkCmdDrawMeshTasksIndirectCountNV-flags-02696",
         "VUID-vkCmdDrawMeshTasksIndirectCountNV-None-02686",
+        "VUID-vkCmdDrawMeshTasksIndirectCountNV-None-02687",
     }},
     {CMD_DRAWINDIRECTBYTECOUNTEXT, {
         "VUID-vkCmdDrawIndirectByteCountEXT-commandBuffer-cmdpool",
@@ -386,6 +395,7 @@ static const std::map<CMD_TYPE, DrawDispatchVuid> drawdispatch_vuid = {
         "VUID-vkCmdDrawIndirectByteCountEXT-primitiveTopology-03420",
         "VUID-vkCmdDrawIndirectByteCountEXT-flags-02696",
         "VUID-vkCmdDrawIndirectByteCountEXT-None-02686",
+        "VUID-vkCmdDrawIndirectByteCountEXT-None-02687",
     }},
     // Used if invalid cmd_type is used
     {CMD_NONE, {
