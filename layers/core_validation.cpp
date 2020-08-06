@@ -1058,8 +1058,9 @@ bool CoreChecks::ValidateCmdBufDrawState(const CMD_BUFFER_STATE *cb_node, CMD_TY
                                 subpass_input_in_fs[descriptor.second.input_index] = true;
                             } else {
                                 result |= LogError(cb_node->commandBuffer, vuid.subpass_input,
-                                                   "%s: Fragment Shader's input attachment index #%d doesn't exist in %s, subpass "
-                                                   "#%d.",
+                                                   "%s: Fragment Shader's input attachment index #%" PRIu32
+                                                   " doesn't exist in %s, subpass "
+                                                   "#%" PRIu32 ".",
                                                    function, descriptor.second.input_index,
                                                    report_data->FormatHandle(cb_node->activeRenderPass->renderPass).c_str(),
                                                    cb_node->activeSubpass);
@@ -1070,7 +1071,8 @@ bool CoreChecks::ValidateCmdBufDrawState(const CMD_BUFFER_STATE *cb_node, CMD_TY
                     for (const auto input : subpass_input_in_fs) {
                         if (!input && subpass.pInputAttachments[index].attachment != VK_ATTACHMENT_UNUSED) {
                             result |= LogError(cb_node->commandBuffer, vuid.subpass_input,
-                                               "%s: %s, subpass #%d, input attachment #%d is not used in fragment shader.",
+                                               "%s: %s, subpass #%" PRIu32 ", input attachment #%" PRIu32
+                                               " is not used in fragment shader.",
                                                function, report_data->FormatHandle(cb_node->activeRenderPass->renderPass).c_str(),
                                                cb_node->activeSubpass, index);
                         }
@@ -1155,11 +1157,11 @@ bool CoreChecks::ValidateCmdBufDrawState(const CMD_BUFFER_STATE *cb_node, CMD_TY
                                         state.per_set[setIndex].validated_set_binding_req_map.begin(),
                                         state.per_set[setIndex].validated_set_binding_req_map.end(),
                                         std::inserter(delta_reqs, delta_reqs.begin()));
-                    result |= ValidateDrawState(descriptor_set, delta_reqs, state.per_set[setIndex].dynamicOffsets, cb_node,
+                    result |= ValidateDrawState(pPipe, descriptor_set, delta_reqs, state.per_set[setIndex].dynamicOffsets, cb_node,
                                                 setIndex, function, vuid);
                 } else {
-                    result |= ValidateDrawState(descriptor_set, binding_req_map, state.per_set[setIndex].dynamicOffsets, cb_node,
-                                                setIndex, function, vuid);
+                    result |= ValidateDrawState(pPipe, descriptor_set, binding_req_map, state.per_set[setIndex].dynamicOffsets,
+                                                cb_node, setIndex, function, vuid);
                 }
             }
         }
@@ -2745,10 +2747,12 @@ bool CoreChecks::ValidateCommandBuffersForSubmit(VkQueue queue, const VkSubmitIn
                         for (auto binding : pipe.second) {
                             std::string error;
                             std::vector<uint32_t> dynamicOffsets;
+                            const PIPELINE_STATE *pipe_state = Get<PIPELINE_STATE>(pipe.first);
+                            if (!pipe_state || pipe_state->destroyed) continue;
                             // dynamic data isn't allowed in UPDATE_AFTER_BIND, so dynamicOffsets is always empty.
-                            skip |= ValidateDescriptorSetBindingData(cb_node, set_node, dynamicOffsets, binding.first,
-                                                                     binding.second.requirements, "vkQueueSubmit()",
-                                                                     GetDrawDispatchVuid(binding.second.cmd_type));
+                            skip |= ValidateDescriptorSetBindingData(
+                                cb_node, pipe_state, set_node, dynamicOffsets, binding.first.first, binding.first.second,
+                                binding.second.requirements, "vkQueueSubmit()", GetDrawDispatchVuid(binding.second.cmd_type));
                         }
                     }
                 }

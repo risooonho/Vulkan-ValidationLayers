@@ -1004,9 +1004,9 @@ void ValidationStateTracker::UpdateDrawState(CMD_BUFFER_STATE *cb_state, CMD_TYP
                                         state.per_set[setIndex].validated_set_binding_req_map.begin(),
                                         state.per_set[setIndex].validated_set_binding_req_map.end(),
                                         std::inserter(delta_reqs, delta_reqs.begin()));
-                    descriptor_set->UpdateDrawState(this, cb_state, cmd_type, pPipe, delta_reqs);
+                    descriptor_set->UpdateDrawState(this, cb_state, cmd_type, pPipe, setIndex, delta_reqs);
                 } else {
-                    descriptor_set->UpdateDrawState(this, cb_state, cmd_type, pPipe, binding_req_map);
+                    descriptor_set->UpdateDrawState(this, cb_state, cmd_type, pPipe, setIndex, binding_req_map);
                 }
 
                 state.per_set[setIndex].validated_set = descriptor_set;

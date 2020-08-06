@@ -801,6 +801,7 @@ struct interface_var {
     bool is_block_member;
     bool is_relaxed_precision;
     bool is_writable;
+    bool is_image_atomic_operation;
     // TODO: collect the name, too? Isn't required to be present.
 };
 typedef std::pair<unsigned, unsigned> descriptor_slot_t;
@@ -953,6 +954,18 @@ class PIPELINE_STATE : public BASE_NODE {
             return raytracingPipelineCI.flags;
         else
             return 0;
+    }
+
+    bool IsImageAtomicOperationDescriptorSet(uint32_t set, uint32_t binding) const {
+        for (const auto &stage : stage_state) {
+            for (const auto &descriptor : stage.descriptor_uses) {
+                if (descriptor.first.first == set && descriptor.first.second == binding &&
+                    descriptor.second.is_image_atomic_operation) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 };
 
@@ -1184,7 +1197,7 @@ struct CMD_BUFFER_STATE : public BASE_NODE {
         descriptor_req requirements;
         CMD_TYPE cmd_type;
     };
-    using Bindings = std::map<uint32_t, BindingInfo>;
+    using Bindings = std::map<descriptor_slot_t, BindingInfo>;
     using Pipelines_Bindings = std::map<VkPipeline, Bindings>;
     std::unordered_map<VkDescriptorSet, Pipelines_Bindings> validate_descriptorsets_in_queuesubmit;
 

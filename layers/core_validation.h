@@ -53,6 +53,7 @@ struct DrawDispatchVuid {
     const char* primitive_topology;
     const char* corner_sampled_address_mode;
     const char* subpass_input;
+    const char* imageview_atomic;
 };
 
 typedef struct {
@@ -369,12 +370,14 @@ class CoreChecks : public ValidationStateTracker {
     VkResult CoreLayerGetValidationCacheDataEXT(VkDevice device, VkValidationCacheEXT validationCache, size_t* pDataSize,
                                                 void* pData);
     // For given bindings validate state at time of draw is correct, returning false on error and writing error details into string*
-    bool ValidateDrawState(const cvdescriptorset::DescriptorSet* descriptor_set, const std::map<uint32_t, descriptor_req>& bindings,
-                           const std::vector<uint32_t>& dynamic_offsets, const CMD_BUFFER_STATE* cb_node, uint32_t setIndex,
-                           const char* caller, const DrawDispatchVuid& vuids) const;
-    bool ValidateDescriptorSetBindingData(const CMD_BUFFER_STATE* cb_node, const cvdescriptorset::DescriptorSet* descriptor_set,
-                                          const std::vector<uint32_t>& dynamic_offsets, uint32_t binding, descriptor_req reqs,
-                                          const char* caller, const DrawDispatchVuid& vuids) const;
+    bool ValidateDrawState(const PIPELINE_STATE* pipe, const cvdescriptorset::DescriptorSet* descriptor_set,
+                           const std::map<uint32_t, descriptor_req>& bindings, const std::vector<uint32_t>& dynamic_offsets,
+                           const CMD_BUFFER_STATE* cb_node, uint32_t setIndex, const char* caller,
+                           const DrawDispatchVuid& vuids) const;
+    bool ValidateDescriptorSetBindingData(const CMD_BUFFER_STATE* cb_node, const PIPELINE_STATE* pipe,
+                                          const cvdescriptorset::DescriptorSet* descriptor_set,
+                                          const std::vector<uint32_t>& dynamic_offsets, uint32_t setIndex, uint32_t binding,
+                                          descriptor_req reqs, const char* caller, const DrawDispatchVuid& vuids) const;
 
     // Validate contents of a CopyUpdate
     using DescriptorSet = cvdescriptorset::DescriptorSet;
@@ -973,6 +976,12 @@ class CoreChecks : public ValidationStateTracker {
     bool PreCallValidateCmdDispatchIndirect(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset) const;
     bool PreCallValidateCmdDrawIndirect(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, uint32_t count,
                                         uint32_t stride) const;
+    bool PreCallValidateCmdDispatchBase(VkCommandBuffer commandBuffer, uint32_t baseGroupX, uint32_t baseGroupY,
+                                        uint32_t baseGroupZ, uint32_t groupCountX, uint32_t groupCountY,
+                                        uint32_t groupCountZ) const;
+    bool PreCallValidateCmdDispatchBaseKHR(VkCommandBuffer commandBuffer, uint32_t baseGroupX, uint32_t baseGroupY,
+                                           uint32_t baseGroupZ, uint32_t groupCountX, uint32_t groupCountY,
+                                           uint32_t groupCountZ) const;
     bool PreCallValidateCmdSetEvent(VkCommandBuffer commandBuffer, VkEvent event, VkPipelineStageFlags stageMask) const;
     bool PreCallValidateCmdResetEvent(VkCommandBuffer commandBuffer, VkEvent event, VkPipelineStageFlags stageMask) const;
     bool PreCallValidateCmdWaitEvents(VkCommandBuffer commandBuffer, uint32_t eventCount, const VkEvent* pEvents,

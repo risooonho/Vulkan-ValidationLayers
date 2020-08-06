@@ -697,9 +697,10 @@ unsigned DescriptorRequirementsBitsFromFormat(VkFormat fmt) {
 //  This includes validating that all descriptors in the given bindings are updated,
 //  that any update buffers are valid, and that any dynamic offsets are within the bounds of their buffers.
 // Return true if state is acceptable, or false and write an error message into error string
-bool CoreChecks::ValidateDrawState(const DescriptorSet *descriptor_set, const std::map<uint32_t, descriptor_req> &bindings,
-                                   const std::vector<uint32_t> &dynamic_offsets, const CMD_BUFFER_STATE *cb_node, uint32_t setIndex,
-                                   const char *caller, const DrawDispatchVuid &vuids) const {
+bool CoreChecks::ValidateDrawState(const PIPELINE_STATE *pipe, const DescriptorSet *descriptor_set,
+                                   const std::map<uint32_t, descriptor_req> &bindings, const std::vector<uint32_t> &dynamic_offsets,
+                                   const CMD_BUFFER_STATE *cb_node, uint32_t setIndex, const char *caller,
+                                   const DrawDispatchVuid &vuids) const {
     bool result = false;
     for (auto binding_pair : bindings) {
         auto binding = binding_pair.first;
@@ -719,15 +720,16 @@ bool CoreChecks::ValidateDrawState(const DescriptorSet *descriptor_set, const st
             // or the view could have been destroyed
             continue;
         }
-        result |=
-            ValidateDescriptorSetBindingData(cb_node, descriptor_set, dynamic_offsets, binding, binding_pair.second, caller, vuids);
+        result |= ValidateDescriptorSetBindingData(cb_node, pipe, descriptor_set, dynamic_offsets, setIndex, binding,
+                                                   binding_pair.second, caller, vuids);
     }
     return result;
 }
 
-bool CoreChecks::ValidateDescriptorSetBindingData(const CMD_BUFFER_STATE *cb_node, const DescriptorSet *descriptor_set,
-                                                  const std::vector<uint32_t> &dynamic_offsets, uint32_t binding,
-                                                  descriptor_req reqs, const char *caller, const DrawDispatchVuid &vuids) const {
+bool CoreChecks::ValidateDescriptorSetBindingData(const CMD_BUFFER_STATE *cb_node, const PIPELINE_STATE *pipe,
+                                                  const DescriptorSet *descriptor_set, const std::vector<uint32_t> &dynamic_offsets,
+                                                  uint32_t setIndex, uint32_t binding, descriptor_req reqs, const char *caller,
+                                                  const DrawDispatchVuid &vuids) const {
     using DescriptorClass = cvdescriptorset::DescriptorClass;
     using BufferDescriptor = cvdescriptorset::BufferDescriptor;
     using ImageDescriptor = cvdescriptorset::ImageDescriptor;
@@ -913,6 +915,27 @@ bool CoreChecks::ValidateDescriptorSetBindingData(const CMD_BUFFER_STATE *cb_nod
                                 "%s encountered the following validation error at %s time: Descriptor in binding #%" PRIu32
                                 " index %" PRIu32 " requires bound image to have multiple samples, but got VK_SAMPLE_COUNT_1_BIT.",
                                 report_data->FormatHandle(set).c_str(), caller, binding, index);
+                        }
+
+                        // Verify VK_FORMAT_FEATURE_STORAGE_IMAGE_ATOMIC_BIT
+                        if (descriptor_set->GetTypeFromIndex(index) == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE &&
+                            pipe->IsImageAtomicOperationDescriptorSet(setIndex, binding)) {
+                            VkFormatProperties format_properties = GetPDFormatProperties(image_view_ci.format);
+                            VkFormatFeatureFlags features =
+                                (image_view_state->image_state->createInfo.tiling == VK_IMAGE_TILING_LINEAR)
+                                    ? format_properties.linearTilingFeatures
+                                    : format_properties.optimalTilingFeatures;
+                            if (!(features & VK_FORMAT_FEATURE_STORAGE_IMAGE_ATOMIC_BIT)) {
+                                auto set = descriptor_set->GetSet();
+                                return LogError(
+                                    set, vuids.imageview_atomic,
+                                    "%s encountered the following validation error at %s time: Descriptor in binding #%" PRIu32
+                                    " index %" PRIu32
+                                    ", %s, format %s, doesn't "
+                                    "contain VK_FORMAT_FEATURE_STORAGE_IMAGE_ATOMIC_BIT.",
+                                    report_data->FormatHandle(set).c_str(), caller, binding, index,
+                                    report_data->FormatHandle(image_view).c_str(), string_VkFormat(image_view_ci.format));
+                            }
                         }
                     }
                 } else if (descriptor_class == DescriptorClass::TexelBuffer) {
@@ -1412,7 +1435,7 @@ void cvdescriptorset::DescriptorSet::PerformCopyUpdate(ValidationStateTracker *d
 // Prereq: This should be called for a set that has been confirmed to be active for the given cb_node, meaning it's going
 //   to be used in a draw by the given cb_node
 void cvdescriptorset::DescriptorSet::UpdateDrawState(ValidationStateTracker *device_data, CMD_BUFFER_STATE *cb_node,
-                                                     CMD_TYPE cmd_type, const PIPELINE_STATE *pipe,
+                                                     CMD_TYPE cmd_type, const PIPELINE_STATE *pipe, uint32_t setIndex,
                                                      const std::map<uint32_t, descriptor_req> &binding_req_map) {
     if (!device_data->disabled[command_buffer_state] && !IsPushDescriptor()) {
         // bind cb to this descriptor set
@@ -1442,7 +1465,7 @@ void cvdescriptorset::DescriptorSet::UpdateDrawState(ValidationStateTracker *dev
         if (flags & (VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT)) {
             if (!(flags & VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT)) {
                 cb_node->validate_descriptorsets_in_queuesubmit[set_][pipe->pipeline].insert(
-                    {binding, {binding_req_pair.second, cmd_type}});
+                    {descriptor_slot_t{setIndex, binding}, {binding_req_pair.second, cmd_type}});
             }
             continue;
         }
