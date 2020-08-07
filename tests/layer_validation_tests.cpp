@@ -1348,21 +1348,26 @@ void OneOffDescriptorSet::WriteDescriptorBufferView(int blinding, VkBufferView &
 }
 
 void OneOffDescriptorSet::WriteDescriptorImageInfo(int blinding, VkImageView image_view, VkSampler sampler,
-                                                   VkDescriptorType descriptorType, VkImageLayout imageLayout) {
+                                                   VkDescriptorType descriptorType, VkImageLayout imageLayout, uint32_t count) {
+    const auto index = image_infos.size();
+
     VkDescriptorImageInfo image_info = {};
     image_info.imageView = image_view;
     image_info.sampler = sampler;
     image_info.imageLayout = imageLayout;
-    image_infos.emplace_back(image_info);
+
+    for (uint32_t i = 0; i < count; ++i) {
+        image_infos.emplace_back(image_info);
+    }
 
     VkWriteDescriptorSet descriptor_write;
     memset(&descriptor_write, 0, sizeof(descriptor_write));
     descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     descriptor_write.dstSet = set_;
     descriptor_write.dstBinding = blinding;
-    descriptor_write.descriptorCount = 1;
+    descriptor_write.descriptorCount = count;
     descriptor_write.descriptorType = descriptorType;
-    descriptor_write.pImageInfo = &image_infos.back();
+    descriptor_write.pImageInfo = &image_infos[index];
     descriptor_write.pBufferInfo = nullptr;
     descriptor_write.pTexelBufferView = nullptr;
 

@@ -390,7 +390,7 @@ struct OneOffDescriptorSet {
                                    VkDescriptorType descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER);
     void WriteDescriptorImageInfo(int binding, VkImageView image_view, VkSampler sampler,
                                   VkDescriptorType descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                  VkImageLayout imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                                  VkImageLayout imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, uint32_t count = 1);
     void UpdateDescriptorSets();
 };
 
