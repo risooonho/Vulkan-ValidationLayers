@@ -7146,3 +7146,77 @@ TEST_F(VkLayerTest, InvailStorageImageAtomicOperation) {
     m_commandBuffer->EndRenderPass();
     m_commandBuffer->end();
 }
+
+TEST_F(VkLayerTest, InvailStorageImageAtomicOperation2) {
+    TEST_DESCRIPTION(
+        "If storage images use atomic operation, the view's format MUST support VK_FORMAT_FEATURE_STORAGE_IMAGE_ATOMIC_BIT");
+
+    ASSERT_NO_FATAL_FAILURE(Init());
+
+    // mockICD mode cannot know what features the format supports.
+    if (IsPlatform(kMockICD) || DeviceSimulation()) {
+        printf("%sNot suppored by MockICD, skipping tests\n", kSkipPrefix);
+        return;
+    }
+
+    ASSERT_NO_FATAL_FAILURE(InitRenderTarget());
+
+    VkPhysicalDeviceFeatures device_features = {};
+    ASSERT_NO_FATAL_FAILURE(GetPhysicalDeviceFeatures(&device_features));
+    if (!device_features.vertexPipelineStoresAndAtomics || !device_features.fragmentStoresAndAtomics) {
+        printf("%s vertexPipelineStoresAndAtomics & fragmentStoresAndAtomics NOT supported. skipped.\n", kSkipPrefix);
+        return;
+    }
+
+    VkImageUsageFlags usage = VK_IMAGE_USAGE_STORAGE_BIT;
+    VkFormat format =
+        VK_FORMAT_B8G8R8A8_UNORM;  // The format doesn't support VK_FORMAT_FEATURE_STORAGE_IMAGE_ATOMIC_BIT to cause DesiredFailure.
+    VkImageObj image(m_device);
+    auto image_ci = VkImageObj::ImageCreateInfo2D(64, 64, 1, 1, format, usage, VK_IMAGE_TILING_OPTIMAL);
+    image.Init(image_ci);
+    VkImageView view = image.targetView(format);
+
+    VkSampler sampler = VK_NULL_HANDLE;
+    VkSamplerCreateInfo sampler_info = SafeSaneSamplerCreateInfo();
+    vk::CreateSampler(m_device->device(), &sampler_info, NULL, &sampler);
+
+    char const *fsSource =
+        "#version 450\n"
+        "#extension GL_EXT_shader_atomic_float : enable\n"
+        "layout(set=0, binding=0, rgba8) uniform image2D x;\n "
+        "layout(set=0, binding=1, rgba8) uniform image2D x2[2];\n "
+        "void main() {\n"
+        "      imageAtomicExchange(x, ivec2(0), 1);\n"
+        "      imageAtomicExchange(x2[0], ivec2(0), 1);\n "
+        "}\n";
+
+    VkShaderObj vs(m_device, bindStateVertShaderText, VK_SHADER_STAGE_VERTEX_BIT, this);
+    VkShaderObj fs(m_device, fsSource, VK_SHADER_STAGE_FRAGMENT_BIT, this);
+
+    CreatePipelineHelper g_pipe(*this);
+    g_pipe.InitInfo();
+    g_pipe.shader_stages_ = {vs.GetStageCreateInfo(), fs.GetStageCreateInfo()};
+    g_pipe.dsl_bindings_ = {{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+                            {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}};
+    g_pipe.InitState();
+    ASSERT_VK_SUCCESS(g_pipe.CreateGraphicsPipeline());
+
+    g_pipe.descriptor_set_->WriteDescriptorImageInfo(0, view, sampler, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_IMAGE_LAYOUT_GENERAL);
+    g_pipe.descriptor_set_->WriteDescriptorImageInfo(1, view, sampler, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_IMAGE_LAYOUT_GENERAL,
+                                                     2);
+    g_pipe.descriptor_set_->UpdateDescriptorSets();
+
+    m_commandBuffer->begin();
+    m_commandBuffer->BeginRenderPass(m_renderPassBeginInfo);
+    vk::CmdBindPipeline(m_commandBuffer->handle(), VK_PIPELINE_BIND_POINT_GRAPHICS, g_pipe.pipeline_);
+    vk::CmdBindDescriptorSets(m_commandBuffer->handle(), VK_PIPELINE_BIND_POINT_GRAPHICS, g_pipe.pipeline_layout_.handle(), 0, 1,
+                              &g_pipe.descriptor_set_->set_, 0, nullptr);
+
+    m_errorMonitor->SetDesiredFailureMsg(VK_DEBUG_REPORT_ERROR_BIT_EXT, "VUID-vkCmdDraw-None-02691");
+    m_errorMonitor->SetDesiredFailureMsg(VK_DEBUG_REPORT_ERROR_BIT_EXT, "VUID-vkCmdDraw-None-02691");
+    vk::CmdDraw(m_commandBuffer->handle(), 1, 0, 0, 0);
+    m_errorMonitor->VerifyFound();
+
+    m_commandBuffer->EndRenderPass();
+    m_commandBuffer->end();
+}
